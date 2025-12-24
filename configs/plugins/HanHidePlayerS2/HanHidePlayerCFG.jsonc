@@ -1,0 +1,7 @@
+{
+  "HanHidePlayerCFG": {
+    "EnablePlugins": true,
+    "HideMenuCommand": "sw_hide",
+    "HidedistCommand": "sw_hd"
+  }
+}
