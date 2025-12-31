@@ -22,6 +22,8 @@ public class HanHidePlayerGlobals
 
     public readonly Dictionary<int, DateTime> LastCommandTime = new();
 
+    public CancellationTokenSource? g_OnTimer { get; set; } = null;
+
 
 }
 
@@ -48,10 +50,3 @@ public class PlayerSettings
 
 }
 
-public enum HideMode
-{
-    None,       // ²»Òþ²Ø
-    HideAll,    // È«¾ÖÒþ²Ø
-    KeyToggle,  // °´¼üÇÐ»»Òþ²Ø
-    Distance    // ¾àÀëÒþ²Ø
-}

@@ -25,5 +25,6 @@ public class HanHidePlayerHelpers
         return dx * dx + dy * dy + dz * dz;
     }
 
+    
 
 }

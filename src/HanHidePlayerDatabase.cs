@@ -32,7 +32,7 @@ public class HanHidePlayerDatabase
 
 
 
-        string configDir = _core.PluginDataDirectory; // Path.GetDirectoryName(_core.Configuration.GetConfigPath("HanHidePlayerCFG.jsonc"))!;
+        string configDir = _core.PluginDataDirectory; 
         _dbPath = Path.Combine(configDir, "HanHidePlayer.db");
         Directory.CreateDirectory(Path.GetDirectoryName(_dbPath)!);
 
@@ -99,29 +99,33 @@ public class HanHidePlayerDatabase
             .ExecuteAffrowsAsync();
     }
 
-    public async Task Save(IPlayer player)
+    public async Task Save(ulong steamId, int playerId)
     {
-        await SavePlayerSettingsAsync(player);
-    }
-
-    public async Task SavePlayerSettingsAsync(IPlayer player)
-    {
-        if (player == null || !player.IsValid) return;
-
-        if (_fsql == null) return;
-
-        var settings = new PlayerSettings
+        try
         {
-            SteamId = player.SteamID,
-            HideAll = _globals.hideEnabled.Contains(player.PlayerID),
-            ButtonHide = _globals.PlayerdButtonHideEnabled.GetValueOrDefault(player.PlayerID, true),
-            DistanceHide = _globals.PlayerdistanceHideEnabled.GetValueOrDefault(player.PlayerID, false),
-            HideDistance = _globals.PlayerHideDistance.GetValueOrDefault(player.PlayerID, _globals.maxHideDistance)
-        };
+            if (_fsql == null)
+            {
+                _logger.LogWarning("Data fsql is null£¬check your database¡£");
+                return;
+            }
 
-        await _fsql.InsertOrUpdate<PlayerSettings>()
-            .SetSource(settings)
-            .ExecuteAffrowsAsync();
+            var settings = new PlayerSettings
+            {
+                SteamId = steamId,
+                HideAll = _globals.hideEnabled.Contains(playerId),
+                ButtonHide = _globals.PlayerdButtonHideEnabled.GetValueOrDefault(playerId, true),
+                DistanceHide = _globals.PlayerdistanceHideEnabled.GetValueOrDefault(playerId, false),
+                HideDistance = _globals.PlayerHideDistance.GetValueOrDefault(playerId, _globals.maxHideDistance)
+            };
+
+            await _fsql.InsertOrUpdate<PlayerSettings>()
+                .SetSource(settings)
+                .ExecuteAffrowsAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"[DataError] SteamID: {steamId}, ErrorMessage: {ex.Message}");
+        }
     }
 
 

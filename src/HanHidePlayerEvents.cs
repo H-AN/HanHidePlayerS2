@@ -34,13 +34,18 @@ public class HanHidePlayerEvents
     public void HookEvents()
     {
         _core.Event.OnClientConnected += Event_OnClientConnected;
-        _core.Event.OnTick += Event_OnTick;
         _core.Event.OnClientKeyStateChanged += Event_OnClientKeyStateChanged;
 
+        _core.Event.OnMapLoad += Event_OnMapLoad;
         _core.Event.OnMapUnload += Event_OnMapUnload;
         _core.Event.OnClientDisconnected += Event_OnClientDisconnected;
 
         _core.Event.OnClientSteamAuthorize += Event_OnClientSteamAuthorize;
+    }
+
+    private void Event_OnMapLoad(IOnMapLoadEvent @event)
+    {
+        GlobalOnTimer();
     }
 
     private void Event_OnClientSteamAuthorize(IOnClientSteamAuthorizeEvent @event)
@@ -128,86 +133,74 @@ public class HanHidePlayerEvents
             _globals.hideEnabled.Remove(playerId);
     }
 
-    private void Event_OnTick()
+
+    public void GlobalOnTimer()
     {
-        var players = _core.PlayerManager.GetAllPlayers();
-        foreach (var viewer in players)
+        _globals.g_OnTimer?.Cancel();
+        _globals.g_OnTimer = _core.Scheduler.RepeatBySeconds(0.5f, () =>
         {
-            if (viewer == null || !viewer.IsValid || viewer.IsFakeClient)
-                continue;
+            var players = _core.PlayerManager.GetAllPlayers().ToList();
 
-            var viewerPawn = viewer.PlayerPawn;
-            if (viewerPawn == null || !viewerPawn.IsValid)
-                continue;
-
-            if (!_globals.blockMap.ContainsKey(viewer.PlayerID))
-                _globals.blockMap[viewer.PlayerID] = new HashSet<int>();
-
-            var hideSet = _globals.blockMap[viewer.PlayerID];
-            hideSet.Clear();
-
-            foreach (var target in players)
+            foreach (var viewer in players)
             {
-                if (target == null || !target.IsValid)
-                    continue;
+                if (viewer?.IsValid != true || viewer.IsFakeClient) continue;
+                var viewerPawn = viewer.PlayerPawn;
+                if (viewerPawn?.IsValid != true) continue;
 
-                if (target.PlayerID == viewer.PlayerID)
-                    continue;
-
-                var targetPawn = target.PlayerPawn;
-                if (targetPawn == null || !targetPawn.IsValid)
-                    continue;
-
-                bool shouldHide = false;
-
-                if (_globals.hideEnabled.Contains(viewer.PlayerID) && targetPawn.TeamNum == viewerPawn.TeamNum)
+                if (!_globals.blockMap.TryGetValue(viewer.PlayerID, out var hideSet))
                 {
-                    shouldHide = true;
+                    hideSet = new HashSet<int>();
+                    _globals.blockMap[viewer.PlayerID] = hideSet;
                 }
+                hideSet.Clear();
 
-                if (_globals.PlayerdistanceHideEnabled.GetValueOrDefault(viewer.PlayerID, false) && targetPawn.TeamNum == viewerPawn.TeamNum)
+                bool isGlobalHideEnabled = _globals.hideEnabled.Contains(viewer.PlayerID);
+                bool isDistHideEnabled = _globals.PlayerdistanceHideEnabled.GetValueOrDefault(viewer.PlayerID, false);
+                float maxDist = _globals.PlayerHideDistance.GetValueOrDefault(viewer.PlayerID, _globals.maxHideDistance);
+                float maxDistSqr = maxDist * maxDist;
+                var viewerPos = viewerPawn.AbsOrigin;
+
+                foreach (var target in players)
                 {
-                    var viewerPos = viewerPawn.AbsOrigin;
-                    if (viewerPos == null)
-                        continue;
+                    if (target?.IsValid != true || target.PlayerID == viewer.PlayerID) continue;
+                    var targetPawn = target.PlayerPawn;
+                    if (targetPawn?.IsValid != true) continue;
 
-                    var targetPos = targetPawn.AbsOrigin;
-                    if (targetPos == null)
-                        continue;
+                    bool shouldHide = false;
 
-                    float distanceSqr = _helpers.DistanceSquared(viewerPos.Value, targetPos.Value);
-                    float distance = _globals.PlayerHideDistance.GetValueOrDefault(viewer.PlayerID, _globals.maxHideDistance);
-                    if (distanceSqr <= distance * distance)
-                        shouldHide = true;
-                }
+                    if (targetPawn.TeamNum == viewerPawn.TeamNum)
+                    {
+                        if (isGlobalHideEnabled)
+                        {
+                            shouldHide = true;
+                        }
+                        else if (isDistHideEnabled && viewerPos != null)
+                        {
+                            var targetPos = targetPawn.AbsOrigin;
+                            if (targetPos != null)
+                            {
+                                float ds = _helpers.DistanceSquared(viewerPos.Value, targetPos.Value);
+                                if (ds <= maxDistSqr) shouldHide = true;
+                            }
+                        }
+                    }
 
-                if (shouldHide)
-                    hideSet.Add(target.PlayerID);
-            }
-
-            foreach (var target in players)
-            {
-                if (target == null || !target.IsValid || target.PlayerID == viewer.PlayerID)
-                    continue;
-
-                var targetPawn = target.PlayerPawn;
-                if (targetPawn == null || !targetPawn.IsValid)
-                    continue;
-
-                if (hideSet.Contains(target.PlayerID))
-                {
-                    if (targetPawn.IsTransmitting(viewer.PlayerID))
+                    bool currentlyTransmitting = targetPawn.IsTransmitting(viewer.PlayerID);
+                    if (shouldHide && currentlyTransmitting)
+                    {
                         targetPawn.SetTransmitState(false, viewer.PlayerID);
-                }
-                else
-                {
-                    if (!targetPawn.IsTransmitting(viewer.PlayerID))
+                        hideSet.Add(target.PlayerID); 
+                    }
+                    else if (!shouldHide && !currentlyTransmitting)
+                    {
                         targetPawn.SetTransmitState(true, viewer.PlayerID);
+                    }
                 }
             }
-        }
-    }
+        });
 
+        _core.Scheduler.StopOnMapChange(_globals.g_OnTimer);
+    }
     private void Event_OnClientKeyStateChanged(SwiftlyS2.Shared.Events.IOnClientKeyStateChangedEvent @event)
     {
         var player = _core.PlayerManager.GetPlayer(@event.PlayerId);

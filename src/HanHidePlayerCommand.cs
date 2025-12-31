@@ -83,14 +83,9 @@ public class HanHidePlayerCommand
 
         player.SendMessage(MessageType.Chat, $"{_core.Translation.GetPlayerLocalizer(player)["HDDistMessage", Distance]}");
 
-        try
-        {
-            Task.Run(() => _database.Save(player));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError($"{_core.Localizer["SaveError", player.Controller.PlayerName, ex.Message]}");
-        }
+        ulong sID = player.SteamID;
+        int pID = player.PlayerID;
+        Task.Run(() => _database.Save(sID, pID));
     }
 
 
